@@ -284,7 +284,15 @@ struct http_state {
   u8_t no_auto_wnd;
   u8_t post_finished;
 #endif /* LWIP_HTTPD_POST_MANUAL_WND */
-#endif /* LWIP_HTTPD_SUPPORT_POST*/
+#endif /* LWIP_HTTPD_SUPPORT_POST */
+#if LWIP_HTTPD_SUPPORT_REST
+  u32_t rest_content_len_left;
+#if LWIP_HTTPD_REST_MANUAL_WND
+  u32_t rest_unrecved_bytes;
+  u8_t rest_no_auto_wnd;
+  u8_t rest_finished;
+#endif /* LWIP_HTTPD_REST_MANUAL_WND */
+#endif /* LWIP_HTTPD_SUPPORT_REST */
 };
 
 #if HTTPD_USE_MEM_POOL
@@ -612,6 +620,18 @@ http_close_or_abort_conn(struct altcp_pcb *pcb, struct http_state *hs, u8_t abor
   }
 #endif /* LWIP_HTTPD_SUPPORT_POST*/
 
+#if LWIP_HTTPD_SUPPORT_REST
+  if (hs != NULL) {
+    if ((hs->rest_content_len_left != 0)
+#if LWIP_HTTPD_REST_MANUAL_WND
+        || ((hs->rest_no_auto_wnd != 0) && (hs->rest_unrecved_bytes != 0))
+#endif /* LWIP_HTTPD_REST_MANUAL_WND */
+       ) {
+      /* make sure the rest code knows that the connection is closed */
+      httpd_handle_rest_finished(hs);
+    }
+  }
+#endif /* LWIP_HTTPD_SUPPORT_POST*/
 
   altcp_arg(pcb, NULL);
   altcp_recv(pcb, NULL);
@@ -1585,6 +1605,12 @@ http_send(struct altcp_pcb *pcb, struct http_state *hs)
   }
 #endif /* LWIP_HTTPD_SUPPORT_POST && LWIP_HTTPD_POST_MANUAL_WND */
 
+#if LWIP_HTTPD_SUPPORT_REST && LWIP_HTTPD_REST_MANUAL_WND
+  if (hs->rest_unrecved_bytes != 0) {
+    return 0;
+  }
+#endif /* LWIP_HTTPD_SUPPORT_REST && LWIP_HTTPD_REST_MANUAL_WND */
+
   /* If we were passed a NULL state structure pointer, ignore the call. */
   if (hs == NULL) {
     return 0;
@@ -1754,28 +1780,28 @@ http_post_rxpbuf(struct http_state *hs, struct pbuf *p)
       hs->post_content_len_left -= p->tot_len;
     }
   }
-#if LWIP_HTTPD_SUPPORT_POST && LWIP_HTTPD_POST_MANUAL_WND
+#if LWIP_HTTPD_POST_MANUAL_WND
   /* prevent connection being closed if httpd_post_data_recved() is called nested */
   hs->unrecved_bytes++;
-#endif
+#endif /* LWIP_HTTPD_POST_MANUAL_WND */
   if (p != NULL) {
     err = httpd_post_receive_data(hs, p);
   } else {
     err = ERR_OK;
   }
-#if LWIP_HTTPD_SUPPORT_POST && LWIP_HTTPD_POST_MANUAL_WND
+#if LWIP_HTTPD_POST_MANUAL_WND
   hs->unrecved_bytes--;
-#endif
+#endif /* LWIP_HTTPD_POST_MANUAL_WND */
   if (err != ERR_OK) {
     /* Ignore remaining content in case of application error */
     hs->post_content_len_left = 0;
   }
   if (hs->post_content_len_left == 0) {
-#if LWIP_HTTPD_SUPPORT_POST && LWIP_HTTPD_POST_MANUAL_WND
+#if LWIP_HTTPD_POST_MANUAL_WND
     if (hs->unrecved_bytes != 0) {
       return ERR_OK;
     }
-#endif /* LWIP_HTTPD_SUPPORT_POST && LWIP_HTTPD_POST_MANUAL_WND */
+#endif /* LWIP_HTTPD_POST_MANUAL_WND */
     /* application error or POST finished */
     return http_handle_post_finished(hs);
   }
@@ -1932,6 +1958,271 @@ void httpd_post_data_recved(void *connection, u16_t recved_len)
 
 #endif /* LWIP_HTTPD_SUPPORT_POST */
 
+#if LWIP_HTTPD_SUPPORT_REST
+static void httpd_handle_rest_finished(void *connection) 
+{
+#if LWIP_HTTPD_REST_MANUAL_WND
+  /* Prevent multiple calls to http_rest_finished, since it might have already
+     been called before from httpd_post_data_recved(). */
+  if (hs->rest_finished) {
+    return ERR_OK;
+  }
+  hs->rest_finished = 1;
+#endif /* LWIP_HTTPD_REST_MANUAL_WND */
+  struct http_state *hs = (struct http_state *)connection;
+  if (hs != NULL) {
+    void *data = 0;
+    u16_t data_len = 0;
+    err_t code = http_handle_post_finished(hs, &data, &data_len);
+    switch (code) {
+    	case ERR_REST_200_OK:
+    	case ERR_REST_201_CREATED:
+    	case ERR_REST_202_ACCEPTED:
+    	case ERR_REST_204_NO_CONTENT:
+    	case ERR_REST_400_BAD_REQUEST:
+    	case ERR_REST_404_NOT_FOUND:
+    	case ERR_REST_500_INTERNAL_ERROR:
+    	// TODO!!
+    	break;
+    	default:
+    	// TODO!!
+    	break;
+    }
+    // send response
+    http_send(hs->pcb, hs);
+  }
+}
+
+/** Pass received REST body data to the application and correctly handle
+ * returning a response document or closing the connection.
+ * ATTENTION: The application is responsible for the pbuf now, so don't free it!
+ *
+ * @param hs http connection state
+ * @param p pbuf to pass to the application
+ * @return ERR_OK if passed successfully, another err_t if the response file
+ *         hasn't been found (after POST finished)
+ */
+static err_t
+http_rest_rxpbuf(struct http_state *hs, struct pbuf *p)
+{
+  err_t err;
+
+  if (p != NULL) {
+    /* adjust remaining Content-Length */
+    if (hs->rest_content_len_left < p->tot_len) {
+      hs->rest_content_len_left = 0;
+    } else {
+      hs->rest_content_len_left -= p->tot_len;
+    }
+  }
+#if LWIP_HTTPD_REST_MANUAL_WND
+  /* prevent connection being closed if httpd_post_data_recved() is called nested */
+  hs->rest_unrecved_bytes++;
+#endif /* LWIP_HTTPD_REST_MANUAL_WND */
+  if (p != NULL) {
+    err = httpd_post_receive_data(hs, p);
+  } else {
+    err = ERR_OK;
+  }
+#if LWIP_HTTPD_REST_MANUAL_WND
+  hs->rest_unrecved_bytes--;
+#endif /* LWIP_HTTPD_REST_MANUAL_WND */
+  if (err != ERR_OK) {
+    /* Ignore remaining content in case of application error */
+    hs->rest_content_len_left = 0;
+  }
+  if (hs->rest_content_len_left == 0) {
+#if LWIP_HTTPD_REST_MANUAL_WND
+    if (hs->rest_unrecved_bytes != 0) {
+      return ERR_OK;
+    }
+#endif /* LWIP_HTTPD_REST_MANUAL_WND */
+    /* application error or POST finished */
+    httpd_handle_rest_finished(hs);
+  }
+
+  return ERR_OK;
+}
+
+/** Handle a rest request.
+ *
+ * @param p The input pbuf (containing the POST header and body).
+ * @param hs The http connection state.
+ * @param data HTTP request (header and part of body) from input pbuf(s).
+ * @param data_len Size of 'data'.
+ * @param uri The HTTP URI parsed from input pbuf(s).
+ * @param uri_end Pointer to the end of 'uri' (here, the rest of the HTTP
+ *                header starts).
+ * @return ERR_OK: POST correctly parsed and accepted by the application.
+ *         ERR_INPROGRESS: REST not completely parsed (no error yet)
+ *         another err_t: Error parsing POST or denied by the application
+ */
+static err_t
+http_rest_request(struct pbuf *inp, struct http_state *hs,
+                  char *data, u16_t data_len)
+{
+  char *d = data;
+  char *uri_start = NULL;
+  char *uri_end = NULL;
+  char *req_end = NULL;
+  u8_t rest_auto_wnd = 1;
+  err_t err = ERR_OK;
+  rest_method_t method = REST_METHOD_NONE;
+
+  // get method  
+  if (strncmp(data, "GET", 3) == 0) {
+    method = REST_METHOD_GET;
+  } else if (strncmp(data, "POST", 4) == 0) {
+    method = REST_METHOD_POST;
+  } else if (strncmp(data, "PUT", 3) == 0) {
+    method = REST_METHOD_PUT;
+  } else if (strncmp(data, "PATCH", 5) == 0) {
+    method = REST_METHOD_PATCH;
+  } else if (strncmp(data, "DELETE", 6) == 0) {
+    method = REST_METHOD_DELETE;
+  }
+  // return early if we don't recognize method 
+  if (method == REST_METHOD_NONE) {
+	  return ERR_REST_DISPATCH;
+  }
+  uri_start = lwip_strnstr(data, " ", data_len);
+  if (uri_start == NULL || uri_start == data) {
+  	return ERR_REST_DISPATCH;
+  }
+  uri_end = lwip_strnstr(uri_start, " ", data_len - (uri_start - data));
+  if (uri_end == NULL || uri_end == uri_start) {
+  	return ERR_REST_DISPATCH;
+  }
+  req_end = lwip_strnstr(data, CRLF, data_len);
+  if (req_end == NULL || req_end == data) {
+  	return ERR_REST_DISPATCH;
+  }
+  // point at LF
+  req_end += 1; 
+
+  // add terminator to uri, restored later
+  *uri_end = 0;
+
+  // We don't need content length for a GET request nor do we have a body, 
+  // so just ask the application if this is a good REST call.
+  if (method == REST_METHOD_GET) {
+	  err = httpd_rest_begin(hs, method, uri, req_end + 1, data_len - (req_end - data - 1), 0, &rest_auto_wnd);
+	  // restore space in request
+	  *uri_end = ' ';
+	  return err;
+  }
+
+  // search for end-of-header (first double-CRLF)
+  char *crlfcrlf = lwip_strnstr(req_end + 1, CRLF CRLF, data_len - (req_end - data));
+  if (crlfcrlf != NULL) {
+    // search for "Content-Length: " 
+#define HTTP_REST_HDR_CONTENT_LEN                "Content-Length: "
+#define HTTP_REST_HDR_CONTENT_LEN_LEN            16
+#define HTTP_REST_HDR_CONTENT_LEN_DIGIT_MAX_LEN  10
+    char *scontent_len = lwip_strnstr(req_end + 1, HTTP_REST_HDR_CONTENT_LEN, crlfcrlf - (req_end + 1));
+    if (scontent_len != NULL) {
+      char *scontent_len_end = lwip_strnstr(scontent_len + HTTP_REST_HDR_CONTENT_LEN_LEN, CRLF, HTTP_REST_HDR_CONTENT_LEN_DIGIT_MAX_LEN);
+      if (scontent_len_end != NULL) {
+        int content_len;
+        char *content_len_num = scontent_len + HTTP_REST_HDR_CONTENT_LEN_LEN;
+        content_len = atoi(content_len_num);
+        if (content_len == 0) {
+          /* if atoi returns 0 on error, fix this */
+          if ((content_len_num[0] != '0') || (content_len_num[1] != '\r')) {
+            content_len = -1;
+          }
+        }
+        if (content_len >= 0) {
+          /* adjust length of HTTP header passed to application */
+          const char *hdr_start_after_req = req_end + 1;
+          u16_t hdr_len = (u16_t)LWIP_MIN(data_len, crlfcrlf + 4 - data);
+          u16_t hdr_data_len = (u16_t)LWIP_MIN(data_len, crlfcrlf + 4 - hdr_start_after_req);
+          /* trim http header, restored later */
+          *crlfcrlf = 0;
+          err = httpd_rest_begin(hs, method, uri, hdr_start_after_req, hdr_data_len, content_len, &rest_auto_wnd);
+          if (err == ERR_OK) {
+            /* try to pass in data of the first pbuf(s) */
+            struct pbuf *q = inp;
+            u16_t start_offset = hdr_len;
+#if LWIP_HTTPD_REST_MANUAL_WND
+            hs->rest_no_auto_wnd = !rest_auto_wnd;
+#endif /* LWIP_HTTPD_REST_MANUAL_WND */
+            /* set the Content-Length to be received for this POST */
+            hs->rest_content_len_left = (u32_t)content_len;
+            /* get to the pbuf where the body starts */
+            while ((q != NULL) && (q->len <= start_offset)) {
+              start_offset -= q->len;
+              q = q->next;
+            }
+            if (q != NULL) {
+              /* hide the remaining HTTP header */
+              pbuf_remove_header(q, start_offset);
+#if LWIP_HTTPD_POST_MANUAL_WND
+              if (!rest_auto_wnd) {
+                /* already tcp_recved() this data... */
+                hs->rest_unrecved_bytes = q->tot_len;
+              }
+#endif /* LWIP_HTTPD_POST_MANUAL_WND */
+              pbuf_ref(q);
+              err = http_rest_rxpbuf(hs, q);
+            } else if (hs->rest_content_len_left == 0) {
+              q = pbuf_alloc(PBUF_RAW, 0, PBUF_REF);
+              err = http_rest_rxpbuf(hs, q);
+            } else {
+              err = ERR_OK;
+            }
+          }
+          // restore carriage return
+          *crlfcrlf = '\r';
+        }
+      }
+    }
+  }
+  // restore space in request
+  *uri_end = ' ';
+  return err;
+}
+
+#if LWIP_HTTPD_REST_MANUAL_WND
+/**
+ * @ingroup httpd
+ * A REST implementation can call this function to update the TCP window.
+ * This can be used to throttle data reception (e.g. when received data is
+ * programmed to flash and data is received faster than programmed).
+ *
+ * @param connection A connection handle passed to httpd_post_begin for which
+ *        httpd_post_finished has *NOT* been called yet!
+ * @param recved_len Length of data received (for window update)
+ */
+void httpd_rest_data_recved(void *connection, u16_t recved_len)
+{
+  struct http_state *hs = (struct http_state *)connection;
+  if (hs != NULL) {
+    if (hs->rest_no_auto_wnd) {
+      u16_t len = recved_len;
+      if (hs->rest_unrecved_bytes >= recved_len) {
+        hs->rest_unrecved_bytes -= recved_len;
+      } else {
+        LWIP_DEBUGF(HTTPD_DEBUG | LWIP_DBG_LEVEL_WARNING, ("httpd_rest_data_recved: recved_len too big\n"));
+        len = (u16_t)hs->rest_unrecved_bytes;
+        hs->rest_unrecved_bytes = 0;
+      }
+      if (hs->pcb != NULL) {
+        if (len != 0) {
+          altcp_recved(hs->pcb, len);
+        }
+        if ((hs->rest_content_len_left == 0) && (hs->rest_unrecved_bytes == 0)) {
+          /* finished handling REST */
+          httpd_handle_rest_finished(connection);
+        }
+      }
+    }
+  }
+}
+#endif /* LWIP_HTTPD_REST_MANUAL_WND */
+
+#endif /* LWIP_HTTPD_SUPPORT_REST */
+
 #if LWIP_HTTPD_FS_ASYNC_READ
 /** Try to send more data if file has been blocked before
  * This is a callback function passed to fs_read_async().
@@ -1974,9 +2265,9 @@ http_parse_request(struct pbuf *inp, struct http_state *hs, struct altcp_pcb *pc
 #if LWIP_HTTPD_SUPPORT_REQUESTLIST
   u16_t clen;
 #endif /* LWIP_HTTPD_SUPPORT_REQUESTLIST */
-#if LWIP_HTTPD_SUPPORT_POST
+#if LWIP_HTTPD_SUPPORT_POST || LWIP_HTTPD_SUPPORT_REST
   err_t err;
-#endif /* LWIP_HTTPD_SUPPORT_POST */
+#endif /* LWIP_HTTPD_SUPPORT_POST || LWIP_HTTPD_SUPPORT_REST */
 
   LWIP_UNUSED_ARG(pcb); /* only used for post */
   LWIP_ASSERT("p != NULL", p != NULL);
@@ -2032,8 +2323,24 @@ http_parse_request(struct pbuf *inp, struct http_state *hs, struct altcp_pcb *pc
       int is_09 = 0;
       char *sp1, *sp2;
       u16_t left_len, uri_len;
+#if LWIP_HTTPD_SUPPORT_REST
+#if LWIP_HTTPD_SUPPORT_REQUESTLIST
+      struct pbuf *rest_q = hs->req;
+#else /* LWIP_HTTPD_SUPPORT_REQUESTLIST */
+      struct pbuf *rest_q = inp;
+#endif /* LWIP_HTTPD_SUPPORT_REQUESTLIST */
+#endif /* LWIP_HTTPD_SUPPORT_REST */
       LWIP_DEBUGF(HTTPD_DEBUG | LWIP_DBG_TRACE, ("CRLF received, parsing request\n"));
       /* parse method */
+
+#if LWIP_HTTPD_SUPPORT_REST
+	  err = http_rest_request(rest_q, hs, data, data_len);
+      // if we received ERR_REST_DISPATCH continue normally
+      if (err != ERR_REST_DISPATCH) {
+	     return err;
+      }
+#endif /* LWIP_HTTPD_SUPPORT_REST */
+
       if (!strncmp(data, "GET ", 4)) {
         sp1 = data + 3;
         /* received GET request */
@@ -2555,6 +2862,11 @@ http_recv(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
     hs->unrecved_bytes += p->tot_len;
   } else
 #endif /* LWIP_HTTPD_SUPPORT_POST && LWIP_HTTPD_POST_MANUAL_WND */
+#if LWIP_HTTPD_SUPPORT_REST && LWIP_HTTPD_REST_MANUAL_WND
+  if (hs->rest_no_auto_wnd) {
+    hs->rest_unrecved_bytes += p->tot_len;
+  } else
+#endif /* LWIP_HTTPD_SUPPORT_REST && LWIP_HTTPD_REST_MANUAL_WND */
   {
     /* Inform TCP that we have taken the data. */
     altcp_recved(pcb, p->tot_len);
@@ -2574,6 +2886,20 @@ http_recv(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
     return ERR_OK;
   } else
 #endif /* LWIP_HTTPD_SUPPORT_POST */
+#if LWIP_HTTPD_SUPPORT_REST
+  if (hs->rest_content_len_left > 0) {
+    /* reset idle counter when POST data is received */
+    hs->retries = 0;
+    /* this is data for a POST, pass the complete pbuf to the application */
+    http_rest_rxpbuf(hs, p);
+    /* pbuf is passed to the application, don't free it! */
+    if (hs->rest_content_len_left == 0) {
+      /* all data received, send response or close connection */
+	  httpd_handle_rest_finished(hs);
+    }
+    return ERR_OK;
+  } else
+#endif /* LWIP_HTTPD_SUPPORT_REST */
   {
     if (hs->handle == NULL) {
       err_t parsed = http_parse_request(p, hs, pcb);
@@ -2590,6 +2916,12 @@ http_recv(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
 #endif /* LWIP_HTTPD_SUPPORT_REQUESTLIST */
       pbuf_free(p);
       if (parsed == ERR_OK) {
+#if LWIP_HTTPD_SUPPORT_REST
+        /* all data received, send response or close connection */
+        if (hs->rest_content_len_left == 0) {
+          httpd_handle_rest_finished(hs);
+        } else
+#endif /* LWIP_HTTPD_SUPPORT_REST */
 #if LWIP_HTTPD_SUPPORT_POST
         if (hs->post_content_len_left == 0)
 #endif /* LWIP_HTTPD_SUPPORT_POST */

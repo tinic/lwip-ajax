@@ -136,6 +136,15 @@
 #define LWIP_HTTPD_SUPPORT_POST   0
 #endif
 
+/** Set this to 1 to support HTTP REST */
+#if !defined LWIP_HTTPD_SUPPORT_REST || defined __DOXYGEN__
+#define LWIP_HTTPD_SUPPORT_REST   0
+#endif
+
+#if !defined LWIP_HTTPD_REST_MANUAL_WND || defined __DOXYGEN__
+#define LWIP_HTTPD_POST_MANUAL_WND  0
+#endif
+
 /* The maximum number of parameters that the CGI handler can be sent. */
 #if !defined LWIP_HTTPD_MAX_CGI_PARAMETERS || defined __DOXYGEN__
 #define LWIP_HTTPD_MAX_CGI_PARAMETERS 16

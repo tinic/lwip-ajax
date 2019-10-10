@@ -241,6 +241,78 @@ void httpd_post_data_recved(void *connection, u16_t recved_len);
 
 #endif /* LWIP_HTTPD_SUPPORT_POST */
 
+#if LWIP_HTTPD_SUPPORT_REST
+
+typedef enum {
+	REST_METHOD_NONE            = 0,
+	REST_METHOD_GET             = 1,
+	REST_METHOD_POST            = 2,
+	REST_METHOD_PUT             = 3,
+	REST_METHOD_PATCH           = 4,
+	REST_METHOD_DELETE          = 5,
+} rest_method_t;
+
+typedef enum {
+	ERR_REST_DISPATCH           =  0,
+	ERR_REST_ACCEPT             = -49,
+	ERR_REST_200_OK             = -50,
+	ERR_REST_201_CREATED        = -51,
+	ERR_REST_202_ACCEPTED       = -52,
+	ERR_REST_204_NO_CONTENT     = -53,
+	ERR_REST_400_BAD_REQUEST    = -54,
+	ERR_REST_404_NOT_FOUND      = -55,
+	ERR_REST_500_INTERNAL_ERROR = -56,
+};
+
+/* These functions must be implemented by the application */
+
+/*
+ * @ingroup httpd
+ * Called when a REST call has been potentially requested. The application 
+ * can decide whether to accept it or not. 
+ * 
+ * @param connection Unique connection identifier, valid until httpd_rest_finished
+ *        is called.
+ * @param uri The HTTP header URI receiving the POST request.
+ * @param http_request The raw HTTP request (the first packet, normally).
+ * @param http_request_len Size of 'http_request'.
+ * @return ERR_REST_DISPATCH: indiciate that the http server should 
+ * continue to dispatch normally, treat this as a non-REST request.
+ * ERR_REST_ACCEPT: REST call accepted.
+ * ERR_INPROGRESS: Request was accepted but needs more data
+ */
+err_t httpd_rest_begin(void *connection, rest_method_t method, const char *uri, 
+                       const char *http_request, u16_t http_request_len, 
+                       int content_len, u8_t *rest_auto_wnd);
+
+/**
+ * @ingroup httpd
+ * Called for each pbuf of data that has been received for a REST call.
+ * ATTENTION: The application is responsible for freeing the pbufs passed in!
+ *
+ * @param connection Unique connection identifier.
+ * @param p Received data.
+ * @return ERR_OK: Data accepted.
+ *         another err_t: Data denied, stop sending more data.
+ */
+err_t httpd_rest_receive_data(void *connection, struct pbuf *p);
+
+/**
+ * @ingroup httpd
+ * Called when all data is received or when the connection is closed.
+ * The application can return a data buffer in response to this REST call. 
+ * If the buffer pointer is untouched, a null response is returned.
+ * @return  Return the appropriate error code to indicate which HTTP status code 
+ * to send back to the client. 
+ */
+err_t httpd_rest_finished(void *connection, void **data, u16_t *data_len);
+
+#if LWIP_HTTPD_REST_MANUAL_WND
+void httpd_rest_data_recved(void *connection, u16_t recved_len);
+#endif /* LWIP_HTTPD_REST_MANUAL_WND */
+
+#endif /* LWIP_HTTPD_SUPPORT_REST */
+
 void httpd_init(void);
 
 #if HTTPD_ENABLE_HTTPS
