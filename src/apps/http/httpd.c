@@ -2117,12 +2117,13 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   char *crlfcrlf = lwip_strnstr(req_end + 1, CRLF CRLF, data_len - (req_end - data));
   if (crlfcrlf != NULL) {
     // search for "Content-Length: " 
-    char *scontent_len = lwip_strnstr(req_end + 1, g_psHTTPHeaderStrings[HTTP_HDR_CONTENT_LENGTH], crlfcrlf - (req_end + 1));
+    const char *content_length_str = "Content-Length: ";
+    char *scontent_len = lwip_strnstr(req_end + 1, content_length_str, crlfcrlf - (req_end + 1));
     if (scontent_len != NULL) {
-      char *scontent_len_end = lwip_strnstr(scontent_len + strlen(g_psHTTPHeaderStrings[HTTP_HDR_CONTENT_LENGTH]), CRLF, 10);
+      char *scontent_len_end = lwip_strnstr(scontent_len + strlen(content_length_str), CRLF, 10);
       if (scontent_len_end != NULL) {
         int content_len;
-        char *content_len_num = scontent_len + HTTP_REST_HDR_CONTENT_LEN_LEN;
+        char *content_len_num = scontent_len + strlen(content_length_str);
         content_len = atoi(content_len_num);
         if (content_len == 0) {
           /* if atoi returns 0 on error, fix this */
