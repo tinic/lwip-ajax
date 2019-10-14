@@ -1965,8 +1965,8 @@ void httpd_post_data_recved(void *connection, u16_t recved_len)
 static void httpd_handle_rest_finished(void *connection) 
 {
 #if LWIP_HTTPD_REST_MANUAL_WND
-  /* Prevent multiple calls to http_rest_finished, since it might have already
-     been called before from httpd_post_data_recved(). */
+  /* Prevent multiple calls to httpd_rest_finished, since it might have already
+     been called before from httpd_rest_data_recved(). */
   if (hs->rest_finished) {
     return ERR_OK;
   }
@@ -1974,7 +1974,7 @@ static void httpd_handle_rest_finished(void *connection)
 #endif /* LWIP_HTTPD_REST_MANUAL_WND */
   struct http_state *hs = (struct http_state *)connection;
   if (hs != NULL) {
-    void *data = 0;
+    char *data = 0;
     u16_t data_len = 0;
     err_t code = httpd_rest_finished(hs, &data, &data_len);
     switch (code) {
@@ -1996,14 +1996,14 @@ static void httpd_handle_rest_finished(void *connection)
   }
 }
 
-/** Pass received REST body data to the application and correctly handle
+/** Pass received call body data to the application and correctly handle
  * returning a response document or closing the connection.
  * ATTENTION: The application is responsible for the pbuf now, so don't free it!
  *
  * @param hs http connection state
  * @param p pbuf to pass to the application
  * @return ERR_OK if passed successfully, another err_t if the response file
- *         hasn't been found (after POST finished)
+ *         hasn't been found (after call finished)
  */
 static err_t
 http_rest_rxpbuf(struct http_state *hs, struct pbuf *p)
@@ -2040,7 +2040,7 @@ http_rest_rxpbuf(struct http_state *hs, struct pbuf *p)
       return ERR_OK;
     }
 #endif /* LWIP_HTTPD_REST_MANUAL_WND */
-    /* application error or POST finished */
+    /* application error or call finished */
     httpd_handle_rest_finished(hs);
   }
 
@@ -2055,7 +2055,7 @@ http_rest_rxpbuf(struct http_state *hs, struct pbuf *p)
  * @param data_len Size of 'data'.
  * @return ERR_OK: POST correctly parsed and accepted by the application.
  *         ERR_INPROGRESS: REST not completely parsed (no error yet)
- *         another err_t: Error parsing POST or denied by the application
+ *         another err_t: Error parsing call or denied by the application
  */
 static err_t
 http_rest_request(struct pbuf *inp, struct http_state *hs,
@@ -2080,7 +2080,7 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   } else if (strncmp(data, "DELETE", 6) == 0) {
     method = REST_METHOD_DELETE;
   }
-  // return early if we don't recognize method 
+  // return early if we did not recognize method 
   if (method == REST_METHOD_NONE) {
 	  return ERR_REST_DISPATCH;
   }
@@ -2093,7 +2093,8 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   	return ERR_REST_DISPATCH;
   }
   req_end = lwip_strnstr(data, CRLF, data_len);
-  if (req_end == NULL || req_end == data) {
+  if (req_end == NULL || req_end == data ||
+      uri_start > req_end || uri_end > req_end) {
   	return ERR_REST_DISPATCH;
   }
   // point at LF
@@ -2102,11 +2103,12 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   // add terminator to uri, restored later
   *uri_end = 0;
 
-  // We don't need content length for a GET request nor do we have a body, 
+  // We don't need content length for GET or DELETE, 
   // so just ask the application if this is a good REST call.
-  if (method == REST_METHOD_GET) {
+  if (method == REST_METHOD_GET ||
+      method == REST_METHOD_DELETE) {
 	  err = httpd_rest_begin(hs, method, uri_start, req_end + 1, data_len - (req_end - data - 1), 0, &rest_auto_wnd);
-	  // restore space in request
+	  // restore space after uri
 	  *uri_end = ' ';
 	  return err;
   }
@@ -2115,12 +2117,9 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   char *crlfcrlf = lwip_strnstr(req_end + 1, CRLF CRLF, data_len - (req_end - data));
   if (crlfcrlf != NULL) {
     // search for "Content-Length: " 
-#define HTTP_REST_HDR_CONTENT_LEN                "Content-Length: "
-#define HTTP_REST_HDR_CONTENT_LEN_LEN            16
-#define HTTP_REST_HDR_CONTENT_LEN_DIGIT_MAX_LEN  10
-    char *scontent_len = lwip_strnstr(req_end + 1, HTTP_REST_HDR_CONTENT_LEN, crlfcrlf - (req_end + 1));
+    char *scontent_len = lwip_strnstr(req_end + 1, g_psHTTPHeaderStrings[HTTP_HDR_CONTENT_LENGTH], crlfcrlf - (req_end + 1));
     if (scontent_len != NULL) {
-      char *scontent_len_end = lwip_strnstr(scontent_len + HTTP_REST_HDR_CONTENT_LEN_LEN, CRLF, HTTP_REST_HDR_CONTENT_LEN_DIGIT_MAX_LEN);
+      char *scontent_len_end = lwip_strnstr(scontent_len + strlen(g_psHTTPHeaderStrings[HTTP_HDR_CONTENT_LENGTH]), CRLF, 10);
       if (scontent_len_end != NULL) {
         int content_len;
         char *content_len_num = scontent_len + HTTP_REST_HDR_CONTENT_LEN_LEN;
@@ -2146,7 +2145,7 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
 #if LWIP_HTTPD_REST_MANUAL_WND
             hs->rest_no_auto_wnd = !rest_auto_wnd;
 #endif /* LWIP_HTTPD_REST_MANUAL_WND */
-            /* set the Content-Length to be received for this POST */
+            /* set the Content-Length to be received for this call */
             hs->rest_content_len_left = (u32_t)content_len;
             /* get to the pbuf where the body starts */
             while ((q != NULL) && (q->len <= start_offset)) {
@@ -2156,12 +2155,12 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
             if (q != NULL) {
               /* hide the remaining HTTP header */
               pbuf_remove_header(q, start_offset);
-#if LWIP_HTTPD_POST_MANUAL_WND
+#if LWIP_HTTPD_REST_MANUAL_WND
               if (!rest_auto_wnd) {
                 /* already tcp_recved() this data... */
                 hs->rest_unrecved_bytes = q->tot_len;
               }
-#endif /* LWIP_HTTPD_POST_MANUAL_WND */
+#endif /* LWIP_HTTPD_REST_MANUAL_WND */
               pbuf_ref(q);
               err = http_rest_rxpbuf(hs, q);
             } else if (hs->rest_content_len_left == 0) {
@@ -2177,7 +2176,7 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
       }
     }
   }
-  // restore space in request
+  // restore space after uri
   *uri_end = ' ';
   return err;
 }
@@ -2189,8 +2188,8 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
  * This can be used to throttle data reception (e.g. when received data is
  * programmed to flash and data is received faster than programmed).
  *
- * @param connection A connection handle passed to httpd_post_begin for which
- *        httpd_post_finished has *NOT* been called yet!
+ * @param connection A connection handle passed to http_rest_request for which
+ *        httpd_rest_finished has *NOT* been called yet!
  * @param recved_len Length of data received (for window update)
  */
 void httpd_rest_data_recved(void *connection, u16_t recved_len)
