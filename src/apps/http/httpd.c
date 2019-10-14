@@ -322,6 +322,9 @@ static u8_t http_check_eof(struct altcp_pcb *pcb, struct http_state *hs);
 #if LWIP_HTTPD_FS_ASYNC_READ
 static void http_continue(void *connection);
 #endif /* LWIP_HTTPD_FS_ASYNC_READ */
+#if LWIP_HTTPD_SUPPORT_REST
+static void httpd_handle_rest_finished(void *connection);
+#endif /* LWIP_HTTPD_SUPPORT_REST */
 
 #if LWIP_HTTPD_SSI
 /* SSI insert handler function pointer. */
@@ -1973,7 +1976,7 @@ static void httpd_handle_rest_finished(void *connection)
   if (hs != NULL) {
     void *data = 0;
     u16_t data_len = 0;
-    err_t code = http_handle_post_finished(hs, &data, &data_len);
+    err_t code = httpd_rest_finished(hs, &data, &data_len);
     switch (code) {
     	case ERR_REST_200_OK:
     	case ERR_REST_201_CREATED:
@@ -2020,7 +2023,7 @@ http_rest_rxpbuf(struct http_state *hs, struct pbuf *p)
   hs->rest_unrecved_bytes++;
 #endif /* LWIP_HTTPD_REST_MANUAL_WND */
   if (p != NULL) {
-    err = httpd_post_receive_data(hs, p);
+    err = httpd_rest_receive_data(hs, p);
   } else {
     err = ERR_OK;
   }
@@ -2046,13 +2049,10 @@ http_rest_rxpbuf(struct http_state *hs, struct pbuf *p)
 
 /** Handle a rest request.
  *
- * @param p The input pbuf (containing the POST header and body).
+ * @param inp The input pbuf (containing the POST header and body).
  * @param hs The http connection state.
  * @param data HTTP request (header and part of body) from input pbuf(s).
  * @param data_len Size of 'data'.
- * @param uri The HTTP URI parsed from input pbuf(s).
- * @param uri_end Pointer to the end of 'uri' (here, the rest of the HTTP
- *                header starts).
  * @return ERR_OK: POST correctly parsed and accepted by the application.
  *         ERR_INPROGRESS: REST not completely parsed (no error yet)
  *         another err_t: Error parsing POST or denied by the application
@@ -2061,7 +2061,6 @@ static err_t
 http_rest_request(struct pbuf *inp, struct http_state *hs,
                   char *data, u16_t data_len)
 {
-  char *d = data;
   char *uri_start = NULL;
   char *uri_end = NULL;
   char *req_end = NULL;
@@ -2106,7 +2105,7 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   // We don't need content length for a GET request nor do we have a body, 
   // so just ask the application if this is a good REST call.
   if (method == REST_METHOD_GET) {
-	  err = httpd_rest_begin(hs, method, uri, req_end + 1, data_len - (req_end - data - 1), 0, &rest_auto_wnd);
+	  err = httpd_rest_begin(hs, method, uri_start, req_end + 1, data_len - (req_end - data - 1), 0, &rest_auto_wnd);
 	  // restore space in request
 	  *uri_end = ' ';
 	  return err;
@@ -2139,7 +2138,7 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
           u16_t hdr_data_len = (u16_t)LWIP_MIN(data_len, crlfcrlf + 4 - hdr_start_after_req);
           /* trim http header, restored later */
           *crlfcrlf = 0;
-          err = httpd_rest_begin(hs, method, uri, hdr_start_after_req, hdr_data_len, content_len, &rest_auto_wnd);
+          err = httpd_rest_begin(hs, method, uri_start, hdr_start_after_req, hdr_data_len, content_len, &rest_auto_wnd);
           if (err == ERR_OK) {
             /* try to pass in data of the first pbuf(s) */
             struct pbuf *q = inp;

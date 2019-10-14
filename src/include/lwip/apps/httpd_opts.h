@@ -330,6 +330,10 @@
 #define LWIP_HTTPD_KILL_OLD_ON_CONNECTIONS_EXCEEDED 0
 #endif
 
+#if !defined LWIP_HTTPD_REST_MANUAL_WND || defined __DOXYGEN__
+#define LWIP_HTTPD_REST_MANUAL_WND 0
+#endif
+
 /** Set this to 1 to send URIs without extension without headers
  * (who uses this at all??) */
 #if !defined LWIP_HTTPD_OMIT_HEADER_FOR_EXTENSIONLESS_URI || defined __DOXYGEN__

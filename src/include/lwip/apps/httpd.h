@@ -252,7 +252,7 @@ typedef enum {
 	REST_METHOD_DELETE          = 5,
 } rest_method_t;
 
-typedef enum {
+enum {
 	ERR_REST_DISPATCH           =  0,
 	ERR_REST_ACCEPT             = -49,
 	ERR_REST_200_OK             = -50,
