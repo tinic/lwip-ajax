@@ -404,8 +404,11 @@ pbuf_realloc(struct pbuf *p, u16_t new_len)
   struct pbuf *q;
   u16_t rem_len; /* remaining length */
   u16_t shrink;
-
+  
   LWIP_ASSERT("pbuf_realloc: p != NULL", p != NULL);
+  if (p == NULL) {
+  	return;
+  }
 
   /* desired length larger than current length? */
   if (new_len >= p->tot_len) {
@@ -429,6 +432,9 @@ pbuf_realloc(struct pbuf *p, u16_t new_len)
     /* proceed to next pbuf in chain */
     q = q->next;
     LWIP_ASSERT("pbuf_realloc: q != NULL", q != NULL);
+    if (q == NULL) {
+      return;
+    }
   }
   /* we have now reached the new last pbuf (in q) */
   /* rem_len == desired length for pbuf q */
@@ -443,6 +449,9 @@ pbuf_realloc(struct pbuf *p, u16_t new_len)
     /* reallocate and adjust the length of the pbuf that will be split */
     q = (struct pbuf *)mem_trim(q, (mem_size_t)(((u8_t *)q->payload - (u8_t *)q) + rem_len));
     LWIP_ASSERT("mem_trim returned q == NULL", q != NULL);
+    if (q == NULL) {
+      return;
+    }
   }
   /* adjust length fields for new last pbuf */
   q->len = rem_len;

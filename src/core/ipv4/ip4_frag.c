@@ -323,6 +323,9 @@ ip_reass_dequeue_datagram(struct ip_reassdata *ipr, struct ip_reassdata *prev)
   } else {
     /* it wasn't the first, so it must have a valid 'prev' */
     LWIP_ASSERT("sanity check linked list", prev != NULL);
+    if (prev == NULL) {
+      return;
+    }
     prev->next = ipr->next;
   }
 
