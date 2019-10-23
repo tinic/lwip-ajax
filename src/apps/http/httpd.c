@@ -1968,31 +1968,50 @@ static void httpd_handle_rest_finished(void *connection)
   /* Prevent multiple calls to httpd_rest_finished, since it might have already
      been called before from httpd_rest_data_recved(). */
   if (hs->rest_finished) {
-    return ERR_OK;
+    return;
   }
   hs->rest_finished = 1;
 #endif /* LWIP_HTTPD_REST_MANUAL_WND */
   struct http_state *hs = (struct http_state *)connection;
   if (hs != NULL) {
-    char *data = 0;
+    const char *data = 0;
     u16_t data_len = 0;
     err_t code = httpd_rest_finished(hs, &data, &data_len);
+    memset(&hs->file_handle, 0, sizeof(hs->file_handle));
+    hs->file_handle.data = data;
+    hs->file_handle.len = data_len;
+    hs->handle = &hs->file_handle;
     switch (code) {
     	case ERR_REST_200_OK:
+        hs->file = "HTTP/1.0 200 OK" CRLF CRLF;
+        hs->left = strlen(hs->file);
+        break;
     	case ERR_REST_201_CREATED:
+        hs->file = "HTTP/1.0 201 Created" CRLF CRLF;
+        hs->left = strlen(hs->file);
+        break;
     	case ERR_REST_202_ACCEPTED:
+        hs->file = "HTTP/1.0 202 Accepted" CRLF CRLF;
+        hs->left = strlen(hs->file);
+        break;
     	case ERR_REST_204_NO_CONTENT:
+        hs->file = "HTTP/1.0 204 No Content" CRLF CRLF;
+        hs->left = strlen(hs->file);
+        break;
     	case ERR_REST_400_BAD_REQUEST:
+        hs->file = "HTTP/1.0 400 Bad Request" CRLF CRLF;
+        hs->left = strlen(hs->file);
+        break;
     	case ERR_REST_404_NOT_FOUND:
+        hs->file = "HTTP/1.0 404 Not Found" CRLF CRLF;
+        hs->left = strlen(hs->file);
+        break;
+        default:
     	case ERR_REST_500_INTERNAL_ERROR:
-    	// TODO!!
-    	break;
-    	default:
-    	// TODO!!
-    	break;
+        hs->file = "HTTP/1.0 500 Internal Error" CRLF CRLF;
+        hs->left = strlen(hs->file);
+        break;
     }
-    // send response
-    http_send(hs->pcb, hs);
   }
 }
 
@@ -2088,6 +2107,8 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   if (uri_start == NULL || uri_start == data) {
   	return ERR_REST_DISPATCH;
   }
+  for ( ; (*uri_start) == ' '; uri_start++) {
+  }
   uri_end = lwip_strnstr(uri_start, " ", data_len - (uri_start - data));
   if (uri_end == NULL || uri_end == uri_start) {
   	return ERR_REST_DISPATCH;
@@ -2107,12 +2128,15 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   // so just ask the application if this is a good REST call.
   if (method == REST_METHOD_GET ||
       method == REST_METHOD_DELETE) {
-	  err = httpd_rest_begin(hs, method, uri_start, req_end + 1, data_len - (req_end - data - 1), 0, &rest_auto_wnd);
-	  // restore space after uri
-	  *uri_end = ' ';
-	  return err;
+      err = httpd_rest_begin(hs, method, uri_start, req_end + 1, data_len - (req_end - data - 1), 0, &rest_auto_wnd);
+      if (err != ERR_REST_DISPATCH) {
+        httpd_handle_rest_finished(hs);
+      }
+      // restore space after uri
+      *uri_end = ' ';
+      return err;
   }
-
+  
   // search for end-of-header (first double-CRLF)
   char *crlfcrlf = lwip_strnstr(req_end + 1, CRLF CRLF, data_len - (req_end - data));
   if (crlfcrlf != NULL) {
@@ -2916,10 +2940,7 @@ http_recv(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
       pbuf_free(p);
       if (parsed == ERR_OK) {
 #if LWIP_HTTPD_SUPPORT_REST
-        /* all data received, send response or close connection */
-        if (hs->rest_content_len_left == 0) {
-          httpd_handle_rest_finished(hs);
-        } else
+        if (hs->rest_content_len_left == 0)
 #endif /* LWIP_HTTPD_SUPPORT_REST */
 #if LWIP_HTTPD_SUPPORT_POST
         if (hs->post_content_len_left == 0)

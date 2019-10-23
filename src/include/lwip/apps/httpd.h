@@ -253,7 +253,7 @@ typedef enum {
 } rest_method_t;
 
 enum {
-	ERR_REST_DISPATCH           =  0,
+	ERR_REST_DISPATCH           =   0,
 	ERR_REST_ACCEPT             = -49,
 	ERR_REST_200_OK             = -50,
 	ERR_REST_201_CREATED        = -51,
@@ -305,7 +305,7 @@ err_t httpd_rest_receive_data(void *connection, struct pbuf *p);
  * @return  Return the appropriate error code to indicate which HTTP status code 
  * to send back to the client. 
  */
-err_t httpd_rest_finished(void *connection, char **data, u16_t *data_len);
+err_t httpd_rest_finished(void *connection, const char **data, u16_t *data_len);
 
 #if LWIP_HTTPD_REST_MANUAL_WND
 void httpd_rest_data_recved(void *connection, u16_t recved_len);
