@@ -255,13 +255,6 @@ typedef enum {
 enum {
 	ERR_REST_DISPATCH           =   0,
 	ERR_REST_ACCEPT             = -49,
-	ERR_REST_200_OK             = -50,
-	ERR_REST_201_CREATED        = -51,
-	ERR_REST_202_ACCEPTED       = -52,
-	ERR_REST_204_NO_CONTENT     = -53,
-	ERR_REST_400_BAD_REQUEST    = -54,
-	ERR_REST_404_NOT_FOUND      = -55,
-	ERR_REST_500_INTERNAL_ERROR = -56,
 };
 
 /* These functions must be implemented by the application */

@@ -1977,40 +1977,16 @@ static void httpd_handle_rest_finished(void *connection)
     const char *data = 0;
     u16_t data_len = 0;
     err_t code = httpd_rest_finished(hs, &data, &data_len);
-    memset(&hs->file_handle, 0, sizeof(hs->file_handle));
-    hs->file_handle.data = data;
-    hs->file_handle.len = data_len;
-    hs->handle = &hs->file_handle;
-    switch (code) {
-    	case ERR_REST_200_OK:
-        hs->file = "HTTP/1.0 200 OK" CRLF CRLF;
-        hs->left = strlen(hs->file);
-        break;
-    	case ERR_REST_201_CREATED:
-        hs->file = "HTTP/1.0 201 Created" CRLF CRLF;
-        hs->left = strlen(hs->file);
-        break;
-    	case ERR_REST_202_ACCEPTED:
-        hs->file = "HTTP/1.0 202 Accepted" CRLF CRLF;
-        hs->left = strlen(hs->file);
-        break;
-    	case ERR_REST_204_NO_CONTENT:
-        hs->file = "HTTP/1.0 204 No Content" CRLF CRLF;
-        hs->left = strlen(hs->file);
-        break;
-    	case ERR_REST_400_BAD_REQUEST:
-        hs->file = "HTTP/1.0 400 Bad Request" CRLF CRLF;
-        hs->left = strlen(hs->file);
-        break;
-    	case ERR_REST_404_NOT_FOUND:
-        hs->file = "HTTP/1.0 404 Not Found" CRLF CRLF;
-        hs->left = strlen(hs->file);
-        break;
-        default:
-    	case ERR_REST_500_INTERNAL_ERROR:
-        hs->file = "HTTP/1.0 500 Internal Error" CRLF CRLF;
-        hs->left = strlen(hs->file);
-        break;
+    if (code == ERR_OK) {
+      memset(&hs->file_handle, 0, sizeof(hs->file_handle));
+      hs->file_handle.data = data;
+      hs->file_handle.len = data_len;
+      hs->handle = &hs->file_handle;
+      hs->file = NULL;
+      hs->left = 0;
+    } else {
+        //TODO!!
+      //http_find_file(hs, http_uri_buf, 0);
     }
   }
 }
