@@ -2100,11 +2100,13 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   // add terminator to uri, restored later
   *uri_end = 0;
 
+  const char *hdr_start_after_req = req_end + 1;
+  
   // We don't need content length for GET or DELETE, 
   // so just ask the application if this is a good REST call.
   if (method == REST_METHOD_GET ||
       method == REST_METHOD_DELETE) {
-      err = httpd_rest_begin(hs, method, uri_start, req_end + 1, data_len - (req_end - data - 1), 0, &rest_auto_wnd);
+      err = httpd_rest_begin(hs, method, uri_start, hdr_start_after_req, data_len - (req_end - data - 1), 0, &rest_auto_wnd);
       if (err != ERR_REST_DISPATCH) {
         httpd_handle_rest_finished(hs);
       }
@@ -2113,12 +2115,14 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
       return err;
   }
   
+  err = ERR_ARG;
+  
   // search for end-of-header (first double-CRLF)
-  char *crlfcrlf = lwip_strnstr(req_end + 1, CRLF CRLF, data_len - (req_end - data));
+  char *crlfcrlf = lwip_strnstr(hdr_start_after_req, CRLF CRLF, data_len - (req_end - data));
   if (crlfcrlf != NULL) {
     // search for "Content-Length: " 
     const char *content_length_str = "Content-Length: ";
-    char *scontent_len = lwip_strnstr(req_end + 1, content_length_str, crlfcrlf - (req_end + 1));
+    char *scontent_len = lwip_strnstr(hdr_start_after_req, content_length_str, crlfcrlf - (hdr_start_after_req));
     if (scontent_len != NULL) {
       char *scontent_len_end = lwip_strnstr(scontent_len + strlen(content_length_str), CRLF, 10);
       if (scontent_len_end != NULL) {
@@ -2133,7 +2137,6 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
         }
         if (content_len >= 0) {
           /* adjust length of HTTP header passed to application */
-          const char *hdr_start_after_req = req_end + 1;
           u16_t hdr_len = (u16_t)LWIP_MIN(data_len, crlfcrlf + 4 - data);
           u16_t hdr_data_len = (u16_t)LWIP_MIN(data_len, crlfcrlf + 4 - hdr_start_after_req);
           /* trim http header, restored later */
@@ -2177,6 +2180,15 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
       }
     }
   }
+
+  if (err != ERR_OK) {
+    // No content length is fine too.
+    err = httpd_rest_begin(hs, method, uri_start, hdr_start_after_req, data_len - (req_end - data - 1), 0, &rest_auto_wnd);
+    if (err != ERR_REST_DISPATCH) {
+      httpd_handle_rest_finished(hs);
+    }
+  }
+
   // restore space after uri
   *uri_end = ' ';
   return err;
