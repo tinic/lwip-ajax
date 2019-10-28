@@ -287,10 +287,10 @@ struct http_state {
 #endif /* LWIP_HTTPD_SUPPORT_POST */
 #if LWIP_HTTPD_SUPPORT_REST
   u32_t rest_content_len_left;
+  u8_t rest_finished;
 #if LWIP_HTTPD_REST_MANUAL_WND
   u32_t rest_unrecved_bytes;
   u8_t rest_no_auto_wnd;
-  u8_t rest_finished;
 #endif /* LWIP_HTTPD_REST_MANUAL_WND */
 #endif /* LWIP_HTTPD_SUPPORT_REST */
 };
@@ -1964,16 +1964,14 @@ void httpd_post_data_recved(void *connection, u16_t recved_len)
 #if LWIP_HTTPD_SUPPORT_REST
 static void httpd_handle_rest_finished(void *connection) 
 {
-#if LWIP_HTTPD_REST_MANUAL_WND
-  /* Prevent multiple calls to httpd_rest_finished, since it might have already
-     been called before from httpd_rest_data_recved(). */
-  if (hs->rest_finished) {
-    return;
-  }
-  hs->rest_finished = 1;
-#endif /* LWIP_HTTPD_REST_MANUAL_WND */
   struct http_state *hs = (struct http_state *)connection;
   if (hs != NULL) {
+    /* Prevent multiple calls to httpd_rest_finished, since it might have already
+        been called before from httpd_rest_data_recved(). */
+    if (hs->rest_finished) {
+        return;
+    }
+    hs->rest_finished = 1;
     const char *data = 0;
     u16_t data_len = 0;
     err_t code = httpd_rest_finished(hs, &data, &data_len);
