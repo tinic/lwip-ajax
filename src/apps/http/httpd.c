@@ -2074,25 +2074,27 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
     method = REST_METHOD_PATCH;
   } else if (strncmp(data, "DELETE", 6) == 0) {
     method = REST_METHOD_DELETE;
+  } else if (strncmp(data, "OPTIONS", 7) == 0) {
+    method = REST_METHOD_OPTIONS;
   }
   // return early if we did not recognize method 
   if (method == REST_METHOD_NONE) {
-	  return ERR_REST_DISPATCH;
+	  return ERR_ARG;
   }
   uri_start = lwip_strnstr(data, " ", data_len);
   if (uri_start == NULL || uri_start == data) {
-  	return ERR_REST_DISPATCH;
+  	return ERR_ARG;
   }
   for ( ; (*uri_start) == ' '; uri_start++) {
   }
   uri_end = lwip_strnstr(uri_start, " ", data_len - (uri_start - data));
   if (uri_end == NULL || uri_end == uri_start) {
-  	return ERR_REST_DISPATCH;
+  	return ERR_ARG;
   }
   req_end = lwip_strnstr(data, CRLF, data_len);
   if (req_end == NULL || req_end == data ||
       uri_start > req_end || uri_end > req_end) {
-  	return ERR_REST_DISPATCH;
+  	return ERR_ARG;
   }
   // point at LF
   req_end += 1; 
@@ -2107,7 +2109,7 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   if (method == REST_METHOD_GET ||
       method == REST_METHOD_DELETE) {
       err = httpd_rest_begin(hs, method, uri_start, hdr_start_after_req, data_len - (req_end - data - 1), 0, &rest_auto_wnd);
-      if (err != ERR_REST_DISPATCH) {
+      if (err == ERR_OK) {
         httpd_handle_rest_finished(hs);
       }
       // restore space after uri
@@ -2184,7 +2186,7 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   if (err != ERR_OK) {
     // No content length is fine too.
     err = httpd_rest_begin(hs, method, uri_start, hdr_start_after_req, data_len - (req_end - data - 1), 0, &rest_auto_wnd);
-    if (err != ERR_REST_DISPATCH) {
+    if (err == ERR_OK) {
       httpd_handle_rest_finished(hs);
     }
   }
@@ -2322,7 +2324,7 @@ http_parse_request(struct pbuf *inp, struct http_state *hs, struct altcp_pcb *pc
       LWIP_DEBUGF(HTTPD_DEBUG, ("Warning: incomplete header due to chained pbufs\n"));
     }
   }
-
+  
   /* received enough data for minimal request? */
   if (data_len >= MIN_REQ_LEN) {
     /* wait for CRLF before parsing anything */
@@ -2343,11 +2345,11 @@ http_parse_request(struct pbuf *inp, struct http_state *hs, struct altcp_pcb *pc
 #endif /* LWIP_HTTPD_SUPPORT_REST */
       LWIP_DEBUGF(HTTPD_DEBUG | LWIP_DBG_TRACE, ("CRLF received, parsing request\n"));
       /* parse method */
-
+      
 #if LWIP_HTTPD_SUPPORT_REST
 	  err = http_rest_request(rest_q, hs, data, data_len);
       // if we received ERR_REST_DISPATCH continue normally
-      if (err != ERR_REST_DISPATCH) {
+      if (err == ERR_OK) {
 	     return err;
       }
 #endif /* LWIP_HTTPD_SUPPORT_REST */

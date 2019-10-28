@@ -250,12 +250,8 @@ typedef enum {
 	REST_METHOD_PUT             = 3,
 	REST_METHOD_PATCH           = 4,
 	REST_METHOD_DELETE          = 5,
+    REST_METHOD_OPTIONS         = 6
 } rest_method_t;
-
-enum {
-	ERR_REST_DISPATCH           =   0,
-	ERR_REST_ACCEPT             = -49,
-};
 
 /* These functions must be implemented by the application */
 
