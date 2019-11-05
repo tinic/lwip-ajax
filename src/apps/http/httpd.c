@@ -2438,7 +2438,10 @@ http_parse_request(struct pbuf *inp, struct http_state *hs, struct altcp_pcb *pc
     }
   }
 
-#if LWIP_HTTPD_SUPPORT_REQUESTLIST
+#if LWIP_HTTPD_SUPPORT_REQUESTLIST 
+  if (hs->req == NULL) {
+	return ERR_ARG;
+  }
   clen = pbuf_clen(hs->req);
   if ((hs->req->tot_len <= LWIP_HTTPD_REQ_BUFSIZE) &&
       (clen <= LWIP_HTTPD_REQ_QUEUELEN)) {
