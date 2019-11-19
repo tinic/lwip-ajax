@@ -1044,7 +1044,7 @@ void auth_peer_fail(ppp_pcb *pcb, int protocol) {
  * The peer has been successfully authenticated using `protocol'.
  */
 void auth_peer_success(ppp_pcb *pcb, int protocol, int prot_flavor, const char *name, int namelen) {
-    int bit;
+    int bit = 0;
 #ifndef HAVE_MULTILINK
     LWIP_UNUSED_ARG(name);
     LWIP_UNUSED_ARG(namelen);

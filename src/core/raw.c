@@ -135,7 +135,7 @@ raw_input_state_t
 raw_input(struct pbuf *p, struct netif *inp)
 {
   struct raw_pcb *pcb, *prev;
-  s16_t proto;
+  s16_t proto = 0;
   raw_input_state_t ret = RAW_INPUT_NONE;
   u8_t broadcast = ip_addr_isbroadcast(ip_current_dest_addr(), ip_current_netif());
 

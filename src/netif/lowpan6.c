@@ -347,7 +347,7 @@ lowpan6_frag(struct netif *netif, struct pbuf *p, const struct lowpan6_link_addr
   u8_t *buffer;
   u8_t ieee_header_len;
   u8_t lowpan6_header_len;
-  u8_t hidden_header_len;
+  u8_t hidden_header_len = 0;
   u16_t crc;
   u16_t datagram_offset;
   err_t err = ERR_IF;
