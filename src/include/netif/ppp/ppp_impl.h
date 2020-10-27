@@ -60,16 +60,10 @@ extern "C" {
 /*
  * Memory used for control packets.
  *
- * PPP_CTRL_PBUF_MAX_SIZE is the amount of memory we allocate when we
+ * PPP_CTRL_PBUF_UNKNOWN_SIZE is the amount of memory we allocate when we
  * cannot figure out how much we are going to use before filling the buffer.
  */
-#if PPP_USE_PBUF_RAM
-#define PPP_CTRL_PBUF_TYPE       PBUF_RAM
-#define PPP_CTRL_PBUF_MAX_SIZE   512
-#else /* PPP_USE_PBUF_RAM */
-#define PPP_CTRL_PBUF_TYPE       PBUF_POOL
-#define PPP_CTRL_PBUF_MAX_SIZE   PBUF_POOL_BUFSIZE
-#endif /* PPP_USE_PBUF_RAM */
+#define PPP_CTRL_PBUF_UNKNOWN_SIZE   512
 
 /*
  * The basic PPP frame.
@@ -88,9 +82,17 @@ extern "C" {
 #define	PPP_TRANS	0x20	/* Asynchronous transparency modifier */
 
 /*
+ * PPP_DEFMRU: MRU value used prior negotiation and unless negotiated later.
+ * Must be 1500.
+ */
+#define PPP_DEFMRU      1500
+
+/*
  * Protocol field values.
  */
+#if PPP_IPV4_SUPPORT
 #define PPP_IP		0x21	/* Internet Protocol */
+#endif /* PPP_IPV4_SUPPORT */
 #if 0 /* UNUSED */
 #define PPP_AT		0x29	/* AppleTalk Protocol */
 #define PPP_IPX		0x2b	/* IPX protocol */
@@ -456,8 +458,8 @@ int sif6down (ppp_pcb *pcb);
 int sifnpmode(ppp_pcb *pcb, int proto, enum NPmode mode);
 #endif /* DEMAND_SUPPORt */
 
-void netif_set_mtu(ppp_pcb *pcb, int mtu);
-int netif_get_mtu(ppp_pcb *pcb);
+void ppp_netif_set_mtu(ppp_pcb *pcb, int mtu);
+int ppp_netif_get_mtu(ppp_pcb *pcb);
 
 #if CCP_SUPPORT
 #if 0 /* unused */
@@ -559,7 +561,7 @@ void start_networks(ppp_pcb *pcb);    /* start all the network control protos */
 void continue_networks(ppp_pcb *pcb); /* start network [ip, etc] control protos */
 #if PPP_AUTH_SUPPORT
 #if PPP_SERVER
-int auth_check_passwd(ppp_pcb *pcb, char *auser, int userlen, char *apasswd, int passwdlen, const char **msg, int *msglen);
+int auth_check_passwd(ppp_pcb *pcb, char *auser, unsigned int userlen, char *apasswd, unsigned int passwdlen, const char **msg, int *msglen);
                                 /* check the user name and passwd against configuration */
 void auth_peer_fail(ppp_pcb *pcb, int protocol);
 				/* peer failed to authenticate itself */
