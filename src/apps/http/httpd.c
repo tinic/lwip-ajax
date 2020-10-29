@@ -1982,9 +1982,6 @@ static void httpd_handle_rest_finished(void *connection)
       hs->handle = &hs->file_handle;
       hs->file = NULL;
       hs->left = 0;
-    } else {
-        //TODO!!
-      //http_find_file(hs, http_uri_buf, 0);
     }
   }
 }
@@ -2077,22 +2074,22 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   }
   // return early if we did not recognize method 
   if (method == REST_METHOD_NONE) {
-	  return ERR_ARG;
+      return ERR_ARG;
   }
   uri_start = lwip_strnstr(data, " ", data_len);
   if (uri_start == NULL || uri_start == data) {
-  	return ERR_ARG;
+      return ERR_ARG;
   }
   for ( ; (*uri_start) == ' '; uri_start++) {
   }
   uri_end = lwip_strnstr(uri_start, " ", data_len - (uri_start - data));
   if (uri_end == NULL || uri_end == uri_start) {
-  	return ERR_ARG;
+      return ERR_ARG;
   }
   req_end = lwip_strnstr(data, CRLF, data_len);
   if (req_end == NULL || req_end == data ||
       uri_start > req_end || uri_end > req_end) {
-  	return ERR_ARG;
+      return ERR_ARG;
   }
   // point at LF
   req_end += 1; 
@@ -2345,10 +2342,10 @@ http_parse_request(struct pbuf *inp, struct http_state *hs, struct altcp_pcb *pc
       /* parse method */
       
 #if LWIP_HTTPD_SUPPORT_REST
-	  err = http_rest_request(rest_q, hs, data, data_len);
+      err = http_rest_request(rest_q, hs, data, data_len);
       // if we received ERR_REST_DISPATCH continue normally
       if (err == ERR_OK) {
-	     return err;
+         return err;
       }
 #endif /* LWIP_HTTPD_SUPPORT_REST */
 
@@ -2440,7 +2437,7 @@ http_parse_request(struct pbuf *inp, struct http_state *hs, struct altcp_pcb *pc
 
 #if LWIP_HTTPD_SUPPORT_REQUESTLIST 
   if (hs->req == NULL) {
-	return ERR_ARG;
+    return ERR_ARG;
   }
   clen = pbuf_clen(hs->req);
   if ((hs->req->tot_len <= LWIP_HTTPD_REQ_BUFSIZE) &&
@@ -2909,7 +2906,7 @@ http_recv(void *arg, struct altcp_pcb *pcb, struct pbuf *p, err_t err)
     /* pbuf is passed to the application, don't free it! */
     if (hs->rest_content_len_left == 0) {
       /* all data received, send response or close connection */
-	  httpd_handle_rest_finished(hs);
+      httpd_handle_rest_finished(hs);
     }
     return ERR_OK;
   } else

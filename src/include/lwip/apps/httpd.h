@@ -244,31 +244,31 @@ void httpd_post_data_recved(void *connection, u16_t recved_len);
 #if LWIP_HTTPD_SUPPORT_REST
 
 typedef enum {
-	REST_METHOD_NONE            = 0,
-	REST_METHOD_GET             = 1,
-	REST_METHOD_POST            = 2,
-	REST_METHOD_PUT             = 3,
-	REST_METHOD_PATCH           = 4,
-	REST_METHOD_DELETE          = 5,
-    REST_METHOD_OPTIONS         = 6
+  REST_METHOD_NONE            = 0,
+  REST_METHOD_GET             = 1,
+  REST_METHOD_POST            = 2,
+  REST_METHOD_PUT             = 3,
+  REST_METHOD_PATCH           = 4,
+  REST_METHOD_DELETE          = 5,
+  REST_METHOD_OPTIONS         = 6
 } rest_method_t;
 
 /* These functions must be implemented by the application */
 
 /*
  * @ingroup httpd
- * Called when a REST call has been potentially requested. The application 
+ * Called to test if a REST call has been potentially made. The application 
  * can decide whether to accept it or not. 
  * 
  * @param connection Unique connection identifier, valid until httpd_rest_finished
  *        is called.
- * @param uri The HTTP header URI receiving the POST request.
+ * @param uri The HTTP header URI receiving the REST request.
  * @param http_request The raw HTTP request (the first packet, normally).
  * @param http_request_len Size of 'http_request'.
- * @return ERR_REST_DISPATCH: indiciate that the http server should 
+ * @return ERR_ARG: indiciate that the http server should 
  * continue to dispatch normally, treat this as a non-REST request.
- * ERR_REST_ACCEPT: REST call accepted.
- * ERR_INPROGRESS: Request was accepted but needs more data
+ * ERR_OK: REST call accepted. The application will now receive httpd_rest_receive_data 
+ * calls and one httpd_rest_finished call.
  */
 err_t httpd_rest_begin(void *connection, rest_method_t method, const char *uri, 
                        const char *http_request, u16_t http_request_len, 
@@ -288,11 +288,19 @@ err_t httpd_rest_receive_data(void *connection, struct pbuf *p);
 
 /**
  * @ingroup httpd
- * Called when all data is received or when the connection is closed.
- * The application can return a data buffer in response to this REST call. 
+ * Called when all data has been received.
+ *
+ * The application can and probably should return a full response to the REST call
+ * in progress here. Usually this means sending at least a HTTP status code string, 
+ * but more often requires additional HTTP header fields and payload data.
+ * 
  * If the buffer pointer is untouched, a null response is returned.
- * @return  Return the appropriate error code to indicate which HTTP status code 
- * to send back to the client. 
+ *
+ * @param connection Unique connection identifier.
+ * @param data Pointer to data which should be sent back.
+ * @param data_len Length of data which should be sent back.
+ * @return ERR_OK: Indicate that the buffer should be sent.
+ *         another err_t: stop sending more data.
  */
 err_t httpd_rest_finished(void *connection, const char **data, u16_t *data_len);
 
