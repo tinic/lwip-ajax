@@ -257,12 +257,14 @@ typedef enum {
 
 /*
  * @ingroup httpd
- * Called to test if a REST call has been potentially made. The application 
+ * Called to test if a REST call has been made. The application 
  * can decide whether to accept it or not. 
  * 
  * @param connection Unique connection identifier, valid until httpd_rest_finished
  *        is called.
  * @param uri The HTTP header URI receiving the REST request.
+ * @param method One of REST_METHOD_GET, REST_METHOD_POST, REST_METHOD_PUT, 
+ REST_METHOD_PATCH, REST_METHOD_DELETE or REST_METHOD_OPTIONS.
  * @param http_request The raw HTTP request (the first packet, normally).
  * @param http_request_len Size of 'http_request'.
  * @return ERR_ARG: indiciate that the http server should 
@@ -300,7 +302,7 @@ err_t httpd_rest_receive_data(void *connection, struct pbuf *p);
  * @param data Pointer to data which should be sent back.
  * @param data_len Length of data which should be sent back.
  * @return ERR_OK: Indicate that the buffer should be sent.
- *         another err_t: stop sending more data.
+ *         another err_t: Stop sending more data.
  */
 err_t httpd_rest_finished(void *connection, const char **data, u16_t *data_len);
 
