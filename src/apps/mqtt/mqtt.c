@@ -998,6 +998,7 @@ mqtt_tcp_sent_cb(void *arg, struct altcp_pcb *tpcb, u16_t len)
         r->cb(r->arg, ERR_OK);
       }
       mqtt_delete_request(r);
+      r = 0;
     }
     /* Try send any remaining buffers from output queue */
     mqtt_output_send(&client->output, client->conn);

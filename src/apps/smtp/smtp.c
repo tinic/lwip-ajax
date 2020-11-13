@@ -1033,6 +1033,9 @@ smtp_prepare_helo(struct smtp_session *s, u16_t *tx_buf_len, struct altcp_pcb *p
   size_t ipa_len;
   const char *ipa = ipaddr_ntoa(altcp_get_ip(pcb, 1));
   LWIP_ASSERT("ipaddr_ntoa returned NULL", ipa != NULL);
+  if (ipa == NULL) {
+    return SMTP_NULL;
+  }
   ipa_len = strlen(ipa);
   LWIP_ASSERT("string too long", ipa_len <= (SMTP_TX_BUF_LEN-SMTP_CMD_EHLO_1_LEN-SMTP_CMD_EHLO_2_LEN));
 

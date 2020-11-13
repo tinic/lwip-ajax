@@ -646,6 +646,9 @@ etharp_input(struct pbuf *p, struct netif *netif)
   ip4_addr_t sipaddr, dipaddr;
   u8_t for_us, from_us;
 
+  ip4_addr_set_zero(&sipaddr);
+  ip4_addr_set_zero(&dipaddr);
+
   LWIP_ASSERT_CORE_LOCKED();
 
   LWIP_ERROR("netif != NULL", (netif != NULL), return;);

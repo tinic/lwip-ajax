@@ -787,6 +787,7 @@ pbuf_free(struct pbuf *p)
           /* type == PBUF_RAM */
         } else if (alloc_src == PBUF_TYPE_ALLOC_SRC_MASK_STD_HEAP) {
           mem_free(p);
+          p = 0;
         } else {
           /* @todo: support freeing other types */
           LWIP_ASSERT("invalid pbuf type", 0);
