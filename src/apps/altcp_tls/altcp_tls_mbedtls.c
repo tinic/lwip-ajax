@@ -83,6 +83,9 @@
 
 #include <string.h>
 
+#ifndef ALTCP_MBEDTLS_RNG_FN
+#define ALTCP_MBEDTLS_RNG_FN   mbedtls_entropy_func
+#endif
 #ifndef ALTCP_MBEDTLS_ENTROPY_PTR
 #define ALTCP_MBEDTLS_ENTROPY_PTR   NULL
 #endif
