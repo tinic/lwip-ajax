@@ -225,7 +225,7 @@ static void check_pkt(struct pbuf *p, u32_t pos, const u8_t *mem, u32_t len)
   fail_unless(pos + len <= p->len); /* All data we seek within same pbuf */
 
   data = (u8_t*)p->payload;
-  fail_if(memcmp(&data[pos], mem, len), "data at pos %d, len %d in packet %d did not match", pos, len, txpacket);
+  ck_assert_msg(!memcmp(&data[pos], mem, len), "data at pos %d, len %d in packet %d did not match", pos, len, txpacket);
 }
 
 static void check_pkt_fuzzy(struct pbuf *p, u32_t startpos, const u8_t *mem, u32_t len)
@@ -502,17 +502,17 @@ START_TEST(test_dhcp)
   fail_if(memcmp(&netmask, &net_test.netmask, sizeof(ip4_addr_t)));
   fail_if(memcmp(&gw, &net_test.gw, sizeof(ip4_addr_t)));
 
-  fail_unless(txpacket == 1, "TX %d packets, expected 1", txpacket); /* Nothing more sent */
+  ck_assert_msg(txpacket == 1, "TX %d packets, expected 1", txpacket); /* Nothing more sent */
   xid = htonl(netif_dhcp_data(&net_test)->xid);
   memcpy(&dhcp_offer[46], &xid, 4); /* insert correct transaction id */
   send_pkt(&net_test, dhcp_offer, sizeof(dhcp_offer));
 
-  fail_unless(txpacket == 2, "TX %d packets, expected 2", txpacket); /* DHCP request sent */
+  ck_assert_msg(txpacket == 2, "TX %d packets, expected 2", txpacket); /* DHCP request sent */
   xid = netif_dhcp_data(&net_test)->xid; /* Write bad xid, not using htonl! */
   memcpy(&dhcp_ack[46], &xid, 4);
   send_pkt(&net_test, dhcp_ack, sizeof(dhcp_ack));
 
-  fail_unless(txpacket == 2, "TX %d packets, still expected 2", txpacket); /* No more sent */
+  ck_assert_msg(txpacket == 2, "TX %d packets, still expected 2", txpacket); /* No more sent */
   xid = htonl(netif_dhcp_data(&net_test)->xid); /* xid updated */
   memcpy(&dhcp_ack[46], &xid, 4); /* insert transaction id */
   send_pkt(&net_test, dhcp_ack, sizeof(dhcp_ack));
@@ -522,7 +522,7 @@ START_TEST(test_dhcp)
   for (i = 0; i < 200; i++) {
     tick_lwip();
   }
-  fail_unless(txpacket == (2 + DHCP_TEST_NUM_ARP_FRAMES), "TX %d packets, expected %d", txpacket, (2 + DHCP_TEST_NUM_ARP_FRAMES));
+  ck_assert_msg(txpacket == (2 + DHCP_TEST_NUM_ARP_FRAMES), "TX %d packets, expected %d", txpacket, (2 + DHCP_TEST_NUM_ARP_FRAMES));
 
   /* Interface up */
   fail_unless(netif_is_up(&net_test));
@@ -807,7 +807,7 @@ START_TEST(test_dhcp_relayed)
   send_pkt(&net_test, relay_offer, sizeof(relay_offer));
 
   /* request sent? */
-  fail_unless(txpacket == 2, "txpkt = %d, should be 2", txpacket);
+  ck_assert_msg(txpacket == 2, "txpkt = %d, should be 2", txpacket);
   xid = htonl(netif_dhcp_data(&net_test)->xid); /* xid updated */
   memcpy(&relay_ack1[46], &xid, 4); /* insert transaction id */
   send_pkt(&net_test, relay_ack1, sizeof(relay_ack1));
@@ -815,7 +815,7 @@ START_TEST(test_dhcp_relayed)
   for (i = 0; i < 200; i++) {
     tick_lwip();
   }
-  fail_unless(txpacket == (2 + DHCP_TEST_NUM_ARP_FRAMES), "TX %d packets, expected %d", txpacket, (2 + DHCP_TEST_NUM_ARP_FRAMES));
+  ck_assert_msg(txpacket == (2 + DHCP_TEST_NUM_ARP_FRAMES), "TX %d packets, expected %d", txpacket, (2 + DHCP_TEST_NUM_ARP_FRAMES));
 
   /* Interface up */
   fail_unless(netif_is_up(&net_test));
@@ -828,20 +828,20 @@ START_TEST(test_dhcp_relayed)
   fail_if(memcmp(&netmask, &net_test.netmask, sizeof(ip4_addr_t)));
   fail_if(memcmp(&gw, &net_test.gw, sizeof(ip4_addr_t)));
 
-  fail_unless(txpacket == (2 + DHCP_TEST_NUM_ARP_FRAMES), "TX %d packets, expected %d", txpacket, (2 + DHCP_TEST_NUM_ARP_FRAMES));
+  ck_assert_msg(txpacket == (2 + DHCP_TEST_NUM_ARP_FRAMES), "TX %d packets, expected %d", txpacket, (2 + DHCP_TEST_NUM_ARP_FRAMES));
 
   for (i = 0; i < 108000 - 25; i++) {
     tick_lwip();
   }
 
   fail_unless(netif_is_up(&net_test));
-  fail_unless(txpacket == (3 + DHCP_TEST_NUM_ARP_FRAMES), "TX %d packets, expected %d", txpacket, (3 + DHCP_TEST_NUM_ARP_FRAMES));
+  ck_assert_msg(txpacket == (3 + DHCP_TEST_NUM_ARP_FRAMES), "TX %d packets, expected %d", txpacket, (3 + DHCP_TEST_NUM_ARP_FRAMES));
 
   /* We need to send arp response here.. */
 
   send_pkt(&net_test, arp_resp, sizeof(arp_resp));
 
-  fail_unless(txpacket == (4 + DHCP_TEST_NUM_ARP_FRAMES), "TX %d packets, expected %d", txpacket, (4 + DHCP_TEST_NUM_ARP_FRAMES));
+  ck_assert_msg(txpacket == (4 + DHCP_TEST_NUM_ARP_FRAMES), "TX %d packets, expected %d", txpacket, (4 + DHCP_TEST_NUM_ARP_FRAMES));
   fail_unless(netif_is_up(&net_test));
 
   xid = htonl(netif_dhcp_data(&net_test)->xid); /* xid updated */
@@ -852,7 +852,7 @@ START_TEST(test_dhcp_relayed)
     tick_lwip();
   }
 
-  fail_unless(txpacket == (4 + DHCP_TEST_NUM_ARP_FRAMES), "TX %d packets, expected %d", txpacket, (5 + DHCP_TEST_NUM_ARP_FRAMES));
+  ck_assert_msg(txpacket == (4 + DHCP_TEST_NUM_ARP_FRAMES), "TX %d packets, expected %d", txpacket, (5 + DHCP_TEST_NUM_ARP_FRAMES));
 
   tcase = TEST_NONE;
   dhcp_stop(&net_test);

@@ -2058,7 +2058,7 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   err_t err = ERR_OK;
   rest_method_t method = REST_METHOD_NONE;
 
-  // get method  
+  /* get method */  
   if (strncmp(data, "GET", 3) == 0) {
     method = REST_METHOD_GET;
   } else if (strncmp(data, "POST", 4) == 0) {
@@ -2072,7 +2072,7 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   } else if (strncmp(data, "OPTIONS", 7) == 0) {
     method = REST_METHOD_OPTIONS;
   }
-  // return early if we did not recognize method 
+  /* return early if we did not recognize method */
   if (method == REST_METHOD_NONE) {
       return ERR_ARG;
   }
@@ -2091,33 +2091,33 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
       uri_start > req_end || uri_end > req_end) {
       return ERR_ARG;
   }
-  // point at LF
+  /* point at LF */
   req_end += 1; 
 
-  // add terminator to uri, restored later
+  /* add terminator to uri, restored later */
   *uri_end = 0;
 
   const char *hdr_start_after_req = req_end + 1;
   
-  // We don't need content length for GET or DELETE, 
-  // so just ask the application if this is a good REST call.
+  /* We don't need content length for GET or DELETE, 
+     so just ask the application if this is a good REST call. */
   if (method == REST_METHOD_GET ||
       method == REST_METHOD_DELETE) {
       err = httpd_rest_begin(hs, method, uri_start, hdr_start_after_req, data_len - (req_end - data - 1), 0, &rest_auto_wnd);
       if (err == ERR_OK) {
         httpd_handle_rest_finished(hs);
       }
-      // restore space after uri
+      /* restore space after uri */
       *uri_end = ' ';
       return err;
   }
   
   err = ERR_ARG;
   
-  // search for end-of-header (first double-CRLF)
+  /* search for end-of-header (first double-CRLF) */
   char *crlfcrlf = lwip_strnstr(hdr_start_after_req, CRLF CRLF, data_len - (req_end - data));
   if (crlfcrlf != NULL) {
-    // search for "Content-Length: " 
+    /* search for "Content-Length: " */ 
     const char *content_length_str = "Content-Length: ";
     char *scontent_len = lwip_strnstr(hdr_start_after_req, content_length_str, crlfcrlf - (hdr_start_after_req));
     if (scontent_len != NULL) {
@@ -2171,7 +2171,7 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
               err = ERR_OK;
             }
           }
-          // restore carriage return
+          /* restore carriage return */
           *crlfcrlf = '\r';
         }
       }
@@ -2179,14 +2179,14 @@ http_rest_request(struct pbuf *inp, struct http_state *hs,
   }
 
   if (err != ERR_OK) {
-    // No content length is fine too.
+    /* No content length is fine too. */
     err = httpd_rest_begin(hs, method, uri_start, hdr_start_after_req, data_len - (req_end - data - 1), 0, &rest_auto_wnd);
     if (err == ERR_OK) {
       httpd_handle_rest_finished(hs);
     }
   }
 
-  // restore space after uri
+  /* restore space after uri */
   *uri_end = ' ';
   return err;
 }
@@ -2343,7 +2343,7 @@ http_parse_request(struct pbuf *inp, struct http_state *hs, struct altcp_pcb *pc
       
 #if LWIP_HTTPD_SUPPORT_REST
       err = http_rest_request(rest_q, hs, data, data_len);
-      // if we received ERR_REST_DISPATCH continue normally
+      /* if we received ERR_REST_DISPATCH continue normally */
       if (err == ERR_OK) {
          return err;
       }

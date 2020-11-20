@@ -51,12 +51,12 @@ void lwip_check_ensure_no_alloc(unsigned int skip)
   unsigned int mask;
 
   if (!(skip & SKIP_HEAP)) {
-    fail_unless(lwip_stats.mem.used == 0,
+    ck_assert_msg(lwip_stats.mem.used == 0,
       "mem heap still has %d bytes allocated", lwip_stats.mem.used);
   }
   for (i = 0, mask = 1; i < MEMP_MAX; i++, mask <<= 1) {
     if (!(skip & mask)) {
-      fail_unless(lwip_stats.memp[i]->used == 0,
+      ck_assert_msg(lwip_stats.memp[i]->used == 0,
         "memp pool '%s' still has %d entries allocated",
         lwip_stats.memp[i]->name, lwip_stats.memp[i]->used);
     }

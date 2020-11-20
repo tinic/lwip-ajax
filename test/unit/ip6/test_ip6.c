@@ -348,9 +348,9 @@ START_TEST(test_ip6_dest_unreachable_chained_pbuf)
   fail_unless(icmp6hdr->code == ICMP6_DUR_PORT);
   fail_unless(icmp6hdr->data == lwip_htonl(0));
   icmpptr += ICMP6_HLEN;
-  fail_unless(memcmp(icmpptr, udp_hdr, sizeof(udp_hdr)) == 0, "mismatch in copied ip6/udp header");
+  ck_assert_msg(memcmp(icmpptr, udp_hdr, sizeof(udp_hdr)) == 0, "mismatch in copied ip6/udp header");
   icmpptr += sizeof(udp_hdr);
-  fail_unless(memcmp(icmpptr, udp_payload, sizeof(udp_payload)) == 0, "mismatch in copied udp payload");
+  ck_assert_msg(memcmp(icmpptr, udp_payload, sizeof(udp_payload)) == 0, "mismatch in copied udp payload");
   pbuf_free(cloned_pbuf);
 }
 END_TEST
