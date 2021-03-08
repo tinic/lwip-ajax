@@ -1045,6 +1045,7 @@ altcp_tls_free_config(struct altcp_tls_config *conf)
   if (conf->ca) {
     mbedtls_x509_crt_free(conf->ca);
   }
+  mbedtls_ssl_config_free(&conf->conf)
   altcp_mbedtls_free_config(conf);
   altcp_mbedtls_unref_entropy();
 }
